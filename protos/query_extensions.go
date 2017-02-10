@@ -1,3 +1,7 @@
+/**
+Probably want to get rid of these in any kind of production build, as they're really only helpful for debugging the output of the query parser
+*/
+
 package messages_query
 
 import (
