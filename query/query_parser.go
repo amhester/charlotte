@@ -8,22 +8,16 @@ import (
 	QueryModels "github.com/amhester/charlotte/protos"
 )
 
-type work struct {
-	Error     error
-	QueryPart *QueryModels.QueryPart
-	PartIdx   int
-}
-
-func ParseQuery(query string) (QueryModels.Query, error) {
+func ParseQuery(query string) (*QueryModels.QueryPart, error) {
 	var err error
 	raw := []byte(query)
-	var resQuery = QueryModels.Query{}
+	var resQuery = &QueryModels.QueryPart{}
 	wg := &sync.WaitGroup{}
-	c := make(chan work)
 	escaped := false
 	leftR := false
 	partIdx := 0
 	lastIdx := 0
+	previous := resQuery
 	for i := 0; i < len(raw); i++ {
 		char := raw[i]
 		switch char {
@@ -51,26 +45,20 @@ func ParseQuery(query string) (QueryModels.Query, error) {
 		default:
 			continue
 		}
+		newPart := &QueryModels.QueryPart{}
+		previous.Next = newPart
+		previous = newPart
 		wg.Add(1)
-		go buildQueryPart(c, wg, raw[lastIdx:i], partIdx)
+		go buildQueryPart(wg, raw[lastIdx:i], newPart)
 		partIdx++
 		lastIdx = i
 	}
-	resQuery.QueryParts = make([]*QueryModels.QueryPart, partIdx+1)
-	go monitorWork(wg, c)
-	for w := range c {
-		if w.Error != nil {
-			err = w.Error
-		}
-		resQuery.QueryParts[w.PartIdx] = w.QueryPart
-	}
+	wg.Wait()
 	return resQuery, err
 }
 
-func buildQueryPart(c chan work, wg *sync.WaitGroup, raw []byte, idx int) {
-	w := work{PartIdx: idx}
-	defer wg.Done()
-	q := &QueryModels.QueryPart{}
+func buildQueryPart(wg *sync.WaitGroup, raw []byte, q *QueryModels.QueryPart) {
+	var err error
 	switch raw[0] {
 	case 45: // -> -
 		q.Type = QueryModels.QueryPartType_Edge
@@ -87,7 +75,7 @@ func buildQueryPart(c chan work, wg *sync.WaitGroup, raw []byte, idx int) {
 	escaped := false
 	lastIdx := 0
 	for i := 0; i < len(raw); i++ {
-		if w.Error != nil {
+		if err != nil {
 			break
 		}
 		char := raw[i]
@@ -104,7 +92,7 @@ func buildQueryPart(c chan work, wg *sync.WaitGroup, raw []byte, idx int) {
 		}
 		if char == 41 { // -> )
 			if !escaped {
-				q.Filters, w.Error = buildFilterExpression(raw[lastIdx+1 : i])
+				q.Filters, err = buildFilterExpression(raw[lastIdx+1 : i])
 				lastIdx = i
 			}
 			continue
@@ -117,13 +105,12 @@ func buildQueryPart(c chan work, wg *sync.WaitGroup, raw []byte, idx int) {
 		}
 		if char == 93 {
 			if !escaped { // -> ]
-				q.Captured, w.Error = buildCaptureExpression(raw[lastIdx+1 : i])
+				q.Captured, err = buildCaptureExpression(raw[lastIdx+1 : i])
 			}
 			continue
 		}
 	}
-	w.QueryPart = q
-	c <- w
+	wg.Done()
 }
 
 func buildCaptureExpression(raw []byte) (*QueryModels.DataCapture, error) {
@@ -235,9 +222,4 @@ func buildFilterExpression(raw []byte) ([]*QueryModels.Filter, error) {
 	}
 	///TODO: maybe perform some sane checks on generated filters, such as whether or not the last filter is actually there (if not, indicates unnecessary trailing comma in filter expression -> syntaxError)
 	return filters, err
-}
-
-func monitorWork(wg *sync.WaitGroup, c chan work) {
-	wg.Wait()
-	close(c)
 }
