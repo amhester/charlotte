@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package messages.query;
+
+message Query {
+    repeated QueryPart QueryParts = 1;
+}
+
+enum QueryPartType {
+    Node = 0;
+    Edge = 1;
+    Output = 2;
+}
+
+message QueryPart {
+    QueryPartType Type = 1;
+    bytes EntityType = 2;
+    repeated Filter Filters = 3;
+    DataCapture Captured = 4;
+    DataStructure Output = 5;
+    QueryPart Next = 6;
+}
+
+message Filter {
+    bytes Field = 1;
+    bytes Value = 2;
+}
+
+message DataCapture {
+    bytes VarName = 1;
+    repeated bytes Fields = 2;
+}
+
+message DataStructure {
+    repeated OutputProp props = 1;
+}
+
+message OutputProp {
+    bytes Key = 1;
+    DataStructure Nested = 2;
+}
