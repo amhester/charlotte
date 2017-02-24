@@ -1,0 +1,54 @@
+//Keywords
+@now -> Current date/time in milliseconds
+@today -> Current date (not sure what format yet)
+@index -> keyword for operations on system indexes
+
+//Query
+<entity-type>(key:val...)[var: prop1...]-<relationship-type>(key:val...)[var2: prop1...]-><entity-type>(key:val...)[var3: prop1]=>{var { var2 { var3... }}}
+
+person(id:1)[p1: id, name, age]-frindsWith->person(age: p1.age-5<p1.age<p1.age+5)[friends: id, name, age]-posted->post(publishDate: >@now-30000)[wall: id, author, publishDate, title, description]=>{p1, friends, wall}
+//Example output
+{
+  "p1": {
+    "id": 1,
+	"name": "bob",
+	"age": 24
+  },
+  "friends": [
+    {
+	  "id": 2,
+	  "name": "alice",
+	  "age": 25
+	},
+	{
+	  "id": 3,
+	  "name": "frank",
+	  "age": 22
+	}
+  ],
+  "wall": [
+    { "id": 1, "author": "alice", "publishDate": 1400093092029354, "title": "test title", "description": "Some test description written by alice." },
+	{ "id": 2, "author": "frank", "publishDate": 1400093092029267, "title": "test title2", "description": "Some test description written by frank." },
+	...
+  ]
+}
+
+//Upsert/Delete entity
++/-(entity-type(key:val...))
+
++(person(id: 3, name: "Frank", age: 26)) // => success: true, entity: { _id: 982173, _type: "person", id: 3, name: "Frank", age: 26 }
+-(person(id:3)) // => success: true
+
+//Upsert/Delete relationship
+entity-type(...)[...]+/-(<-relationship-type(key:val...)->)entity-type(...)[...]
+
+person(id: 1)+(-friendsWith(created: @now)-)person(id: 2) // => success: true, relationship: { _id: 133413434, _type: "friendsWith", created: "1400093092029267" }
+person(id: 1)-(-friendsWith(_id: 133413434)-) // => success: true
+or 
+person(id: 1)-(-friendsWith-)person(id: 2) // => success: true
+
+//Create index (all hashes )
+//simple direct form 
++@index(_type, field)
+//simple direct form compound index
++@index(_type, (field,field2...))
